@@ -82,16 +82,22 @@ ai-vtuber/
 ├── vts_controller/             # VTube Studio制御
 │   └── controller.py
 │
-├── topic_sources/              # 話題取得
-│   ├── google_news.py
-│   └── hatena_bookmark.py
-│
 ├── models/                     # AIモデル格納
 │   ├── llm/
 │   └── tts/
 │
+├── monitoring/                 # 監視設定
+│   ├── prometheus/
+│   │   └── prometheus.yml
+│   └── grafana/
+│       └── provisioning/
+│           ├── datasources/prometheus.yml
+│           └── dashboards/ai-vtuber.json
+│
 └── scripts/                    # 運用スクリプト
     ├── start.sh
+    ├── stop.sh
+    ├── health_check.sh
     └── watchdog.py
 ```
 
@@ -205,11 +211,24 @@ curl http://localhost:8080/health
 - [x] はてなブックマーク取得
 - [x] 話題選択ロジック（カテゴリローテーション、重複回避）
 
-### Phase 4: 安定化・運用 ⏳ 未着手
+### Phase 4: 安定化・運用 ✅ 完了
 
-- [ ] Watchdog実装
-- [ ] Prometheus/Grafana監視
-- [ ] VTube Studio連携
+- [x] Prometheusメトリクス統合（main.py）
+  - COMMENTS_TOTAL, RESPONSES_TOTAL, TOPICS_TOTAL (Counter)
+  - FILTERED_TOTAL (Counter with reason label)
+  - SPEAKING_GAUGE, IDLE_TIME_GAUGE (Gauge)
+  - RESPONSE_LATENCY, TTS_LATENCY (Histogram)
+  - /metrics エンドポイント追加
+- [x] Grafana ダッシュボード設定
+  - Prometheus datasource自動設定
+  - AI VTuberダッシュボード (ai-vtuber.json)
+  - コメント数、応答数、レイテンシグラフ等
+- [x] Watchdog強化（scripts/watchdog.py）
+  - Slack/Discord通知対応
+  - GPU VRAM監視
+  - サービス別再起動
+  - 復旧検知・通知
+- [ ] VTube Studio連携（今後）
 
 ---
 
@@ -244,3 +263,25 @@ curl -X POST 'http://localhost:8080/test/comment?author=TestUser&message=Hello'
 ---
 
 **このファイルをプロジェクトルートに配置することで、Claude Codeがプロジェクトの文脈を理解した上で実装を支援します。**
+
+---
+
+## 🚀 次回セッション用引き継ぎプロンプト
+
+以下をコピペして次回セッションを開始:
+
+```
+AI VTuberプロジェクトの続きをやろう。
+
+現在の状況:
+- Phase 1〜4 完了（基盤、コア機能、話題生成、監視）
+- 残りタスク: VTube Studio連携
+
+次のステップ候補:
+1. VTube Studio連携実装（表情制御、リップシンク）
+2. 実際のYouTube Live配信テスト
+3. Style-Bert-VITS2の実モデル設定
+4. その他改善
+
+まずは現在のコードベースを確認して、何から始めるか提案して。
+```

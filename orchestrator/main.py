@@ -4,7 +4,8 @@ from contextlib import asynccontextmanager
 
 import httpx
 import redis.asyncio as redis
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
+from prometheus_client import Counter, Gauge, Histogram, generate_latest, CONTENT_TYPE_LATEST
 
 from config import settings
 from llm.client import LLMClient
@@ -16,6 +17,18 @@ from services.memory_manager import MemoryManager
 from services.priority_scorer import PriorityScorer
 from services.safety_filter import SafetyFilter
 from topic_sources.topic_generator import TopicGenerator
+
+# Prometheusメトリクス
+COMMENTS_TOTAL = Counter('vtuber_comments_total', 'Total comments processed', ['platform'])
+TOPICS_TOTAL = Counter('vtuber_topics_total', 'Total topics generated')
+RESPONSES_TOTAL = Counter('vtuber_responses_total', 'Total LLM responses generated')
+FILTERED_TOTAL = Counter('vtuber_filtered_total', 'Total comments filtered', ['reason'])
+SPEAKING_GAUGE = Gauge('vtuber_is_speaking', 'Whether the VTuber is currently speaking')
+IDLE_TIME_GAUGE = Gauge('vtuber_idle_seconds', 'Seconds since last comment')
+RESPONSE_LATENCY = Histogram('vtuber_response_latency_seconds', 'LLM response generation time',
+                              buckets=[0.5, 1, 2, 5, 10, 30])
+TTS_LATENCY = Histogram('vtuber_tts_latency_seconds', 'TTS generation time',
+                         buckets=[0.1, 0.5, 1, 2, 5])
 
 # グローバル状態
 state = {
@@ -159,6 +172,7 @@ async def process_comment(data: dict):
     is_safe, reason = state["safety"].is_safe(comment)
     if not is_safe:
         print(f"Filtered [{reason}]: {comment.message[:30]}...")
+        FILTERED_TOTAL.labels(reason=reason.split(':')[0]).inc()
         return
 
     # 優先度計算（ログ用）
@@ -172,6 +186,8 @@ async def process_comment(data: dict):
     user_message = f"{comment.author}さん: {comment.message}"
     await generate_and_speak(user_message, CHARACTER_PROMPT)
 
+    # メトリクス更新
+    COMMENTS_TOTAL.labels(platform=comment.platform).inc()
     state["comments_processed"] += 1
 
 
@@ -197,6 +213,7 @@ async def idle_topic_generator():
             continue
 
         idle_time = time.time() - state["last_comment_time"]
+        IDLE_TIME_GAUGE.set(idle_time)
 
         if idle_time > settings.IDLE_THRESHOLD_SECONDS:
             # ニュース/はてブから話題取得を試みる
@@ -215,6 +232,7 @@ async def idle_topic_generator():
             prompt = TOPIC_PROMPT.format(topic=topic_title)
             await generate_and_speak(f"話題: {topic_title}", prompt)
             state["topics_generated"] += 1
+            TOPICS_TOTAL.inc()
             state["last_comment_time"] = time.time()  # リセット
 
             # 次の話題まで60秒待機
@@ -225,6 +243,8 @@ async def generate_and_speak(user_message: str, system_prompt: str):
     """LLMで応答生成 -> TTS -> 発話"""
 
     state["is_speaking"] = True
+    SPEAKING_GAUGE.set(1)
+    start_time = time.time()
 
     try:
         full_response = ""
@@ -269,10 +289,14 @@ async def generate_and_speak(user_message: str, system_prompt: str):
 
     finally:
         state["is_speaking"] = False
+        SPEAKING_GAUGE.set(0)
+        RESPONSE_LATENCY.observe(time.time() - start_time)
+        RESPONSES_TOTAL.inc()
 
 
 async def speak(text: str, emotion: str):
     """TTS APIを呼び出して音声再生"""
+    tts_start = time.time()
     try:
         response = await state["http_client"].post(
             f"{settings.TTS_URL}/synthesize",
@@ -281,6 +305,7 @@ async def speak(text: str, emotion: str):
         )
 
         if response.status_code == 200:
+            TTS_LATENCY.observe(time.time() - tts_start)
             # 音声データを再生（実際はPipeWire/PulseAudioへ出力）
             audio_data = response.content
             await play_audio(audio_data)
@@ -305,6 +330,12 @@ async def play_audio(audio_data: bytes):
 
 
 # ===== API Endpoints =====
+
+
+@app.get("/metrics")
+async def metrics():
+    """Prometheusメトリクスエンドポイント"""
+    return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
 @app.get("/health")
