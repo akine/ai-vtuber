@@ -228,7 +228,11 @@ curl http://localhost:8080/health
   - GPU VRAM監視
   - サービス別再起動
   - 復旧検知・通知
-- [ ] VTube Studio連携（今後）
+- [x] VTube Studio連携
+  - 感情に応じた表情変更（joy, sad, angry, surprise, neutral）
+  - リアルタイムリップシンク（音量RMS解析）
+  - 自動再接続サポート
+  - VTS_ENABLED=true で有効化
 
 ---
 
@@ -274,14 +278,15 @@ curl -X POST 'http://localhost:8080/test/comment?author=TestUser&message=Hello'
 AI VTuberプロジェクトの続きをやろう。
 
 現在の状況:
-- Phase 1〜4 完了（基盤、コア機能、話題生成、監視）
-- 残りタスク: VTube Studio連携
+- Phase 1〜4 + VTube Studio連携 完了
+- 全コア機能実装済み（LLM応答、TTS、チャット取得、話題生成、監視、VTS表情/リップシンク）
 
 次のステップ候補:
-1. VTube Studio連携実装（表情制御、リップシンク）
-2. 実際のYouTube Live配信テスト
-3. Style-Bert-VITS2の実モデル設定
-4. その他改善
+1. 実際のYouTube Live配信テスト
+2. Style-Bert-VITS2の実モデル設定（現在はダミー）
+3. VTube Studio側のホットキー設定ガイド作成
+4. OBS連携・配信設定
+5. その他改善
 
 まずは現在のコードベースを確認して、何から始めるか提案して。
 ```
