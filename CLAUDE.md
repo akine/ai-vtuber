@@ -243,6 +243,18 @@ curl http://localhost:8080/health
   - scripts/download_tts_model.py
   - 4種類の日本語音声モデル対応（jvnv-F1-jp, F2, M1, M2）
 - [x] jvnv-F1-jp モデルダウンロード済み（251MB）
+- [x] PyTorch 2.5.1 + numpy 1.26.4 で互換性問題解決
+- [x] 全サービス動作確認済み（2026-01-24）
+  - LLM: 日本語キャラクター応答 ✅
+  - TTS: 音声生成成功 ✅
+  - 音声再生: Dockerコンテナ内では不可（想定内）
+
+### 音声再生について
+Dockerコンテナ内にはオーディオデバイスがないため、`play_audio()`は失敗する。
+実運用では以下の対応が必要:
+1. WSL2ホスト側でorchestratorを直接実行
+2. PulseAudio/PipeWireをDockerにマウント
+3. 音声ファイルをHTTP経由でストリーミング
 
 ---
 
@@ -288,16 +300,16 @@ curl -X POST 'http://localhost:8080/test/comment?author=TestUser&message=Hello'
 AI VTuberプロジェクトの続きをやろう。
 
 現在の状況:
-- Phase 1〜5 完了（基盤、コア機能、話題生成、監視、VTS連携、TTS実装）
-- TTSモデル（jvnv-F1-jp）ダウンロード済み
-- 全コア機能実装済み
+- Phase 1〜5 完了（全コア機能実装済み）
+- LLM + TTS動作確認済み
+- 音声再生のみDockerコンテナ制限で未対応
 
 次のステップ候補:
-1. Docker Compose全体起動テスト
+1. 音声再生対応（ホスト側実行 or PulseAudioマウント）
 2. 実際のYouTube Live配信テスト
-3. VTube Studio側のホットキー設定ガイド作成
+3. VTube Studio側のホットキー設定ガイド
 4. OBS連携・配信設定
-5. その他改善
+5. Prometheus/Grafana起動テスト
 
-まずは docker compose up -d で全サービス起動テストしてみよう。
+何から始める？
 ```
