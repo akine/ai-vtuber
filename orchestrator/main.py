@@ -1,5 +1,4 @@
 import asyncio
-import re
 import time
 from contextlib import asynccontextmanager
 
@@ -11,7 +10,7 @@ from config import settings
 from llm.client import LLMClient
 from llm.prompts import CHARACTER_PROMPT, TOPIC_PROMPT
 from models.comment import Comment
-from services.comment_fetcher import YouTubeChatFetcher
+from services.comment_fetcher import YouTubeChatFetcher, TwitchChatFetcher, MockChatFetcher
 from services.emotion_analyzer import extract_emotion, remove_emotion_tags
 from services.memory_manager import MemoryManager
 from services.priority_scorer import PriorityScorer
@@ -23,7 +22,28 @@ state = {
     "comments_processed": 0,
     "topics_generated": 0,
     "is_speaking": False,
+    "chat_fetcher": None,
 }
+
+
+def create_chat_fetcher():
+    """設定に基づいてチャット取得を作成"""
+    mode = settings.CHAT_MODE.lower()
+
+    if mode == "youtube":
+        if not settings.YOUTUBE_VIDEO_ID:
+            print("Warning: YOUTUBE_VIDEO_ID not set, falling back to mock mode")
+            return MockChatFetcher(interval=settings.MOCK_INTERVAL)
+        return YouTubeChatFetcher(settings.YOUTUBE_VIDEO_ID)
+
+    elif mode == "twitch":
+        if not settings.TWITCH_TOKEN or not settings.TWITCH_CHANNEL:
+            print("Warning: Twitch credentials not set, falling back to mock mode")
+            return MockChatFetcher(interval=settings.MOCK_INTERVAL)
+        return TwitchChatFetcher(settings.TWITCH_CHANNEL, settings.TWITCH_TOKEN)
+
+    else:  # mock
+        return MockChatFetcher(interval=settings.MOCK_INTERVAL)
 
 
 @asynccontextmanager
@@ -36,17 +56,21 @@ async def lifespan(app: FastAPI):
     state["memory"] = MemoryManager()
     state["http_client"] = httpx.AsyncClient()
 
+    # チャット取得を作成
+    state["chat_fetcher"] = create_chat_fetcher()
+
     # バックグラウンドタスク開始
-    if settings.YOUTUBE_VIDEO_ID:
-        asyncio.create_task(youtube_chat_listener())
+    asyncio.create_task(chat_listener())
     asyncio.create_task(comment_processor())
     asyncio.create_task(idle_topic_generator())
 
-    print("AI VTuber System Started!")
+    print(f"AI VTuber System Started! (Chat mode: {settings.CHAT_MODE})")
 
     yield
 
     # 終了時のクリーンアップ
+    if state["chat_fetcher"]:
+        await state["chat_fetcher"].disconnect()
     await state["redis"].close()
     await state["http_client"].aclose()
 
@@ -54,21 +78,30 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 
-async def youtube_chat_listener():
-    """YouTubeチャットを監視してRedisに投入"""
-    fetcher = YouTubeChatFetcher(settings.YOUTUBE_VIDEO_ID)
-    await fetcher.connect()
+async def chat_listener():
+    """チャットを監視してRedisに投入"""
+    fetcher = state["chat_fetcher"]
+
+    if not await fetcher.connect():
+        print("Failed to connect to chat. Retrying...")
+        await asyncio.sleep(5)
+        if not await fetcher.connect():
+            print("Chat connection failed. Running without chat input.")
+            return
 
     async for comment in fetcher.fetch():
-        await state["redis"].xadd("comment_queue", {
-            "id": comment.id,
-            "platform": comment.platform,
-            "author": comment.author,
-            "message": comment.message,
-            "is_superchat": str(comment.is_superchat),
-            "superchat_amount": str(comment.superchat_amount),
-            "is_member": str(comment.is_member),
-        })
+        try:
+            await state["redis"].xadd("comment_queue", {
+                "id": comment.id,
+                "platform": comment.platform,
+                "author": comment.author,
+                "message": comment.message,
+                "is_superchat": str(comment.is_superchat),
+                "superchat_amount": str(comment.superchat_amount),
+                "is_member": str(comment.is_member),
+            })
+        except Exception as e:
+            print(f"Error adding comment to queue: {e}")
 
 
 async def comment_processor():
@@ -213,7 +246,12 @@ async def generate_and_speak(user_message: str, system_prompt: str):
 
         # メモリに追加
         clean_response = remove_emotion_tags(full_response)
-        state["memory"].add_assistant_message(clean_response)
+        if clean_response:
+            state["memory"].add_assistant_message(clean_response)
+            print(f"Response: {clean_response[:100]}...")
+
+    except Exception as e:
+        print(f"Error generating response: {e}")
 
     finally:
         state["is_speaking"] = False
@@ -257,8 +295,11 @@ async def play_audio(audio_data: bytes):
 
 @app.get("/health")
 async def health_check():
+    fetcher = state.get("chat_fetcher")
     return {
         "status": "healthy",
+        "chat_mode": settings.CHAT_MODE,
+        "chat_connected": fetcher.is_connected() if fetcher else False,
     }
 
 
@@ -269,6 +310,7 @@ async def get_stats():
         "topics_generated": state["topics_generated"],
         "is_speaking": state["is_speaking"],
         "idle_time": time.time() - state["last_comment_time"],
+        "chat_mode": settings.CHAT_MODE,
     }
 
 
