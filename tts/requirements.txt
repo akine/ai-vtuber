@@ -1,0 +1,8 @@
+fastapi>=0.109.0
+uvicorn>=0.27.0
+torch>=2.1.0
+numpy>=1.26.0
+soundfile>=0.12.1
+pydantic>=2.5.0
+# style-bert-vits2 は別途インストールが必要
+# pip install style-bert-vits2

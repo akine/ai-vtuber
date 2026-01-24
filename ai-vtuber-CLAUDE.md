@@ -1,0 +1,182 @@
+# AI VTuber 自動配信システム - Claude Code 設定
+
+## 🖥️ ハードウェア構成
+
+- **CPU**: Intel Core i9-14900K (BIOS Ver 3107 / Microcode 0x12F 適用済み)
+- **RAM**: 128GB (DDR5-4800 32GBx4)
+- **GPU**: NVIDIA GeForce RTX 4090 (24GB VRAM / 水冷)
+- **OS**: Windows 11 Pro + WSL2 (Ubuntu 22.04)
+
+## ⚙️ WSL2 設定 (.wslconfig)
+
+- **Memory**: 96GB (物理128GB中)
+- **Processors**: 32 (全スレッド)
+- **Swap**: 32GB
+
+## ⚠️ 運用上の制約 (重要・必読)
+
+Intel CPUの不安定化問題回避のため、**Node.js実行時は以下を必須**とする:
+
+```bash
+# 1. Eコア固定: Pコア(0-15)を回避
+taskset -c 16-31 <command>
+
+# 2. メモリ最大化: 64GB割り当て
+export NODE_OPTIONS="--max-old-space-size=65536"
+
+# 3. OpenSSL回避: 暗号化エラー防止
+export OPENSSL_ia32cap="~0x20000000"
+```
+
+### 起動エイリアス（.bash_aliases 登録済み）
+
+```bash
+alias cc='export OPENSSL_ia32cap="~0x20000000" && export NODE_OPTIONS="--max-old-space-size=65536" && taskset -c 16-31 claude'
+```
+
+### 📌 重要な注意事項
+
+- **必ずEコア(16-31)で実行**: Pコア使用はCPUクラッシュリスクあり
+- **OpenSSL回避設定は必須**: 設定なしで暗号化通信時エラー
+- **メモリ64GB割り当て推奨**: 大規模コードベース解析時に必要
+
+---
+
+## 📁 プロジェクト情報
+
+- **プロジェクト名**: AI VTuber 自動配信システム
+- **説明**: RTX 4090環境でフルローカル稼働する自律型AI VTuber配信システム
+- **目標**: 視聴者コメントへのリアルタイム応答 + 自動雑談生成による24時間配信
+
+## 🛠️ 技術スタック
+
+| レイヤー | 技術 | 備考 |
+|---------|------|------|
+| LLM | Qwen 2.5 14B-Instruct (4-bit) | vLLM経由、~10GB VRAM |
+| TTS | Style-Bert-VITS2 JP-Extra | ~3GB VRAM |
+| アバター | VTube Studio + Live2D | Windows側、WebSocket API |
+| オーケストレーション | Python 3.11 + FastAPI | 非同期処理 |
+| キュー | Redis Streams | コメント/話題キュー |
+| 配信 | OBS Studio | x264エンコード推奨 |
+| コンテナ | Docker Compose | 全サービス管理 |
+
+## 📂 ディレクトリ構成
+
+```
+ai-vtuber/
+├── CLAUDE.md                   # この設定ファイル
+├── docker-compose.yml
+├── .env
+│
+├── orchestrator/               # メインサービス
+│   ├── main.py                 # FastAPIエントリポイント
+│   ├── config.py               # pydantic-settings
+│   ├── services/               # ビジネスロジック
+│   ├── llm/                    # LLMクライアント
+│   └── requirements.txt
+│
+├── tts/                        # 音声合成サービス
+│   ├── server.py
+│   └── Dockerfile
+│
+├── vts_controller/             # VTube Studio制御
+│   └── controller.py
+│
+├── topic_sources/              # 話題取得
+│   ├── google_news.py
+│   └── hatena_bookmark.py
+│
+├── models/                     # AIモデル格納
+│   ├── llm/
+│   └── tts/
+│
+└── scripts/                    # 運用スクリプト
+    ├── start.sh
+    └── watchdog.py
+```
+
+## 🎯 開発ガイドライン
+
+### コーディング規約
+
+1. **Python 3.11+** を使用
+2. **型ヒント必須** - すべての関数に型アノテーション
+3. **非同期優先** - I/O処理はすべて `async/await`
+4. **Pydantic** - データモデルはPydanticで定義
+5. **docstring** - 公開関数にはdocstring必須
+
+### VRAM配分ルール（24GB中）
+
+```
+LLM (Qwen 14B 4-bit):  10.5GB
+TTS (Style-Bert-VITS2): 3.0GB
+KV Cache:               2.0GB
+VTube Studio:           2.0GB
+System Reserve:         2.5GB
+─────────────────────────────
+合計:                  20.0GB（余裕4GB）
+```
+
+### 重要な設計原則
+
+1. **LLMとTTSは同時実行しない** - VRAM競合回避
+2. **コンテキスト長は4096トークンに制限** - KVキャッシュ爆発防止
+3. **文単位でTTS生成** - レイテンシ最適化
+4. **OBSはCPUエンコード(x264)** - GPU負荷軽減
+
+## 🔧 よく使うコマンド
+
+```bash
+# サービス起動
+docker-compose up -d
+
+# ログ確認
+docker-compose logs -f orchestrator
+
+# vLLM単体テスト
+curl http://localhost:8000/v1/models
+
+# TTS単体テスト
+curl -X POST http://localhost:8001/synthesize \
+  -H "Content-Type: application/json" \
+  -d '{"text": "こんにちは", "emotion": "joy"}'
+
+# ヘルスチェック
+curl http://localhost:8080/health
+```
+
+## 📝 実装時の注意点
+
+### pytchat について
+- 開発停滞中（最終更新2021年）だが動作する
+- 動かない場合は `chat-downloader` へ移行
+- YouTube API quota制限を回避できる
+
+### VTube Studio連携
+- Windows側で起動、API有効化必須
+- WSL2からは `host.docker.internal:8001` で接続
+- pyvts ライブラリを使用
+
+### 感情タグ
+- LLM応答の末尾に `[joy]` `[sad]` `[angry]` `[surprise]` `[neutral]` を付与
+- TTSのスタイルベクトルとVTS表情切り替えに使用
+- 正規表現で除去してから音声化
+
+## 🚨 トラブルシューティング
+
+| 症状 | 原因 | 対策 |
+|------|------|------|
+| CUDA OOM | VRAM超過 | gpu-memory-utilization を 0.50 に |
+| 音声遅延 | TTS生成遅い | 文単位ストリーミング確認 |
+| VTS接続失敗 | API未有効 | VTS設定でAPI ON |
+| 日本語で返答しない | プロンプト不足 | 「必ず日本語で」を明記 |
+
+## 📚 参照ドキュメント
+
+- **実装仕様書**: `ai-vtuber-system-spec.md` を参照
+- **Open-LLM-VTuber**: https://github.com/Open-LLM-VTuber/Open-LLM-VTuber
+- **Style-Bert-VITS2**: https://github.com/litagin02/Style-Bert-VITS2
+
+---
+
+**このファイルをプロジェクトルートに配置することで、Claude Codeがプロジェクトの文脈を理解した上で実装を支援します。**

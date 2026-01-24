@@ -1,0 +1,39 @@
+# Environment
+.env
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+.venv/
+ENV/
+env/
+
+# Models (large files)
+models/llm/*
+models/tts/*
+!models/llm/.gitkeep
+!models/tts/.gitkeep
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Docker
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Tokens
+vts_token.txt
+
+# Huggingface cache
+.cache/
