@@ -15,6 +15,7 @@ from services.emotion_analyzer import extract_emotion, remove_emotion_tags
 from services.memory_manager import MemoryManager
 from services.priority_scorer import PriorityScorer
 from services.safety_filter import SafetyFilter
+from topic_sources.topic_generator import TopicGenerator
 
 # グローバル状態
 state = {
@@ -58,6 +59,9 @@ async def lifespan(app: FastAPI):
 
     # チャット取得を作成
     state["chat_fetcher"] = create_chat_fetcher()
+
+    # 話題ジェネレータを作成
+    state["topic_generator"] = TopicGenerator()
 
     # バックグラウンドタスク開始
     asyncio.create_task(chat_listener())
@@ -172,17 +176,18 @@ async def process_comment(data: dict):
 
 
 async def idle_topic_generator():
-    """コメントがない時の話題生成"""
-    # Note: topic_sources は Phase 3 で実装
-    # ここでは仮の話題リストを使用
-    topics = [
+    """コメントがない時の話題生成（ニュース/はてブから取得）"""
+    topic_gen = state["topic_generator"]
+
+    # フォールバック用の話題リスト
+    fallback_topics = [
         "最近のテクノロジーニュース",
         "おすすめのゲーム",
         "今日の天気について",
         "好きな食べ物の話",
         "最近見たアニメについて",
     ]
-    topic_index = 0
+    fallback_index = 0
 
     while True:
         await asyncio.sleep(5)
@@ -194,12 +199,21 @@ async def idle_topic_generator():
         idle_time = time.time() - state["last_comment_time"]
 
         if idle_time > settings.IDLE_THRESHOLD_SECONDS:
-            topic = topics[topic_index % len(topics)]
-            topic_index += 1
+            # ニュース/はてブから話題取得を試みる
+            topic = await topic_gen.get_random_topic()
 
-            print(f"Generating topic: {topic[:40]}...")
-            prompt = TOPIC_PROMPT.format(topic=topic)
-            await generate_and_speak(f"話題: {topic}", prompt)
+            if topic:
+                topic_title = topic.title
+                topic_source = topic.source
+                print(f"Topic from {topic_source}: {topic_title[:50]}...")
+            else:
+                # フォールバック
+                topic_title = fallback_topics[fallback_index % len(fallback_topics)]
+                fallback_index += 1
+                print(f"Fallback topic: {topic_title[:50]}...")
+
+            prompt = TOPIC_PROMPT.format(topic=topic_title)
+            await generate_and_speak(f"話題: {topic_title}", prompt)
             state["topics_generated"] += 1
             state["last_comment_time"] = time.time()  # リセット
 
