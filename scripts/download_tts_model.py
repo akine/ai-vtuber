@@ -5,11 +5,12 @@ Style-Bert-VITS2 モデルダウンロードスクリプト
 """
 import argparse
 import os
+import shutil
 import sys
 from pathlib import Path
 
 try:
-    from huggingface_hub import hf_hub_download, snapshot_download
+    from huggingface_hub import snapshot_download
 except ImportError:
     print("Error: huggingface_hub not installed")
     print("Run: pip install huggingface_hub")
@@ -21,22 +22,22 @@ AVAILABLE_MODELS = {
     "jvnv-F1-jp": {
         "repo_id": "litagin/style_bert_vits2_jvnv",
         "subfolder": "jvnv-F1-jp",
-        "description": "女性声（明るい）",
+        "description": "女性声（明るい・日本語）",
     },
     "jvnv-F2-jp": {
         "repo_id": "litagin/style_bert_vits2_jvnv",
         "subfolder": "jvnv-F2-jp",
-        "description": "女性声（落ち着き）",
+        "description": "女性声（落ち着き・日本語）",
     },
     "jvnv-M1-jp": {
         "repo_id": "litagin/style_bert_vits2_jvnv",
         "subfolder": "jvnv-M1-jp",
-        "description": "男性声（若い）",
+        "description": "男性声（若い・日本語）",
     },
     "jvnv-M2-jp": {
         "repo_id": "litagin/style_bert_vits2_jvnv",
         "subfolder": "jvnv-M2-jp",
-        "description": "男性声（落ち着き）",
+        "description": "男性声（落ち着き・日本語）",
     },
 }
 
@@ -57,39 +58,34 @@ def download_model(model_name: str, output_dir: Path):
     print(f"Output: {output_dir / model_name}")
 
     try:
-        # モデルファイルをダウンロード
-        local_dir = output_dir / model_name
-        local_dir.mkdir(parents=True, exist_ok=True)
+        # サブフォルダのみをダウンロード
+        local_dir = snapshot_download(
+            repo_id=repo_id,
+            allow_patterns=[f"{subfolder}/*"],
+            local_dir=output_dir,
+        )
 
-        # 必要なファイル
-        files = [
-            f"{subfolder}/config.json",
-            f"{subfolder}/{model_name}.safetensors",
-            f"{subfolder}/style_vectors.npy",
-        ]
+        # ダウンロードしたフォルダを確認
+        src_dir = Path(local_dir) / subfolder
+        dst_dir = output_dir / model_name
 
-        for file_path in files:
-            print(f"  Downloading: {file_path}")
-            hf_hub_download(
-                repo_id=repo_id,
-                filename=file_path,
-                local_dir=output_dir,
-                local_dir_use_symlinks=False,
-            )
+        if src_dir.exists() and src_dir != dst_dir:
+            # 既存の dst_dir を削除してから移動
+            if dst_dir.exists():
+                shutil.rmtree(dst_dir)
+            shutil.move(str(src_dir), str(dst_dir))
 
-        # ファイルを正しい場所に移動
-        src_dir = output_dir / subfolder
-        if src_dir.exists() and src_dir != local_dir:
-            for f in src_dir.iterdir():
-                (local_dir / f.name).write_bytes(f.read_bytes())
-            import shutil
-            shutil.rmtree(src_dir)
+        print(f"\nSuccess! Model saved to: {dst_dir}")
+        print(f"\nFiles downloaded:")
+        for f in dst_dir.iterdir():
+            print(f"  - {f.name}")
 
-        print(f"\nSuccess! Model saved to: {local_dir}")
-        print(f"\nTo use this model, set MODEL_NAME={model_name} in your .env file")
+        print(f"\nTo use this model, set TTS_MODEL_NAME={model_name} in your .env file")
 
     except Exception as e:
         print(f"Error downloading model: {e}")
+        import traceback
+        traceback.print_exc()
         sys.exit(1)
 
 
@@ -99,6 +95,7 @@ def list_models():
     for name, info in AVAILABLE_MODELS.items():
         print(f"  {name}: {info['description']}")
     print(f"\nUsage: python {sys.argv[0]} <model_name>")
+    print(f"Example: python {sys.argv[0]} jvnv-F1-jp")
 
 
 def main():

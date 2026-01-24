@@ -67,10 +67,15 @@ async def startup():
                 model_path = alt_path
 
         config_path = model_path / "config.json"
-        model_file = model_path / f"{MODEL_NAME}.safetensors"
         style_file = model_path / "style_vectors.npy"
 
-        if not config_path.exists():
+        # モデルファイルを検索（バージョン番号付きの場合あり）
+        model_file = None
+        for f in model_path.glob("*.safetensors"):
+            model_file = f
+            break
+
+        if not config_path.exists() or model_file is None:
             print(f"Warning: Model config not found at {config_path}")
             print("Running in dummy mode. Download a model first.")
             tts_model = None
