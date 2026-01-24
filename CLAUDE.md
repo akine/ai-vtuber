@@ -288,6 +288,25 @@ curl -X POST 'http://localhost:8080/test/comment?author=TestUser&message=Hello'
 
 ---
 
+## 📅 セッションログ
+
+### 2026-01-24 セッション
+**実施内容:**
+- Phase 4完了: Prometheusメトリクス、Grafanaダッシュボード、Watchdog強化
+- VTube Studio連携実装: 表情変更、リップシンク
+- Style-Bert-VITS2 TTS実装: サーバー構築、モデルダウンロード
+- PyTorch 2.5.1 + numpy 1.26.4で互換性問題解決
+- 全サービス起動テスト成功（LLM応答✅、TTS生成✅）
+
+**未対応:**
+- 音声再生（Dockerコンテナ内にオーディオデバイスなし）
+- 実際のYouTube Live配信テスト
+- VTube Studio側のホットキー設定
+
+**GitHub:** https://github.com/akine/ai-vtuber (最新コミット: 902b649)
+
+---
+
 **このファイルをプロジェクトルートに配置することで、Claude Codeがプロジェクトの文脈を理解した上で実装を支援します。**
 
 ---
@@ -299,17 +318,19 @@ curl -X POST 'http://localhost:8080/test/comment?author=TestUser&message=Hello'
 ```
 AI VTuberプロジェクトの続きをやろう。
 
-現在の状況:
-- Phase 1〜5 完了（全コア機能実装済み）
-- LLM + TTS動作確認済み
-- 音声再生のみDockerコンテナ制限で未対応
+前回までの状況:
+- Phase 1〜5 完了（基盤、コア機能、話題生成、監視、VTS連携、TTS実装）
+- docker compose up -d で全サービス起動済み
+- LLM（Qwen 2.5 14B-AWQ）: コメントに日本語で返答 ✅
+- TTS（Style-Bert-VITS2 jvnv-F1-jp）: 音声生成成功 ✅
+- 音声再生: Dockerコンテナ制限で未対応
 
 次のステップ候補:
-1. 音声再生対応（ホスト側実行 or PulseAudioマウント）
-2. 実際のYouTube Live配信テスト
-3. VTube Studio側のホットキー設定ガイド
+1. 音声再生対応（WSL2ホスト側でorchestrator実行 or PulseAudioマウント）
+2. 実際のYouTube Live配信テスト（YOUTUBE_VIDEO_IDを.envに設定）
+3. VTube Studio側のホットキー設定ガイド作成
 4. OBS連携・配信設定
-5. Prometheus/Grafana起動テスト
+5. Prometheus/Grafana起動・確認
 
-何から始める？
+どれからやる？
 ```
