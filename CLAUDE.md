@@ -234,6 +234,16 @@ curl http://localhost:8080/health
   - 自動再接続サポート
   - VTS_ENABLED=true で有効化
 
+### Phase 5: TTS本番実装 ✅ 完了
+
+- [x] Style-Bert-VITS2 サーバー実装
+  - 感情→スタイルマッピング（joy→Happy, sad→Sad等）
+  - 動的モデルファイル検索（バージョン番号付き対応）
+- [x] モデルダウンロードスクリプト
+  - scripts/download_tts_model.py
+  - 4種類の日本語音声モデル対応（jvnv-F1-jp, F2, M1, M2）
+- [x] jvnv-F1-jp モデルダウンロード済み（251MB）
+
 ---
 
 ## 🔧 現在の起動コマンド
@@ -278,15 +288,16 @@ curl -X POST 'http://localhost:8080/test/comment?author=TestUser&message=Hello'
 AI VTuberプロジェクトの続きをやろう。
 
 現在の状況:
-- Phase 1〜4 + VTube Studio連携 完了
-- 全コア機能実装済み（LLM応答、TTS、チャット取得、話題生成、監視、VTS表情/リップシンク）
+- Phase 1〜5 完了（基盤、コア機能、話題生成、監視、VTS連携、TTS実装）
+- TTSモデル（jvnv-F1-jp）ダウンロード済み
+- 全コア機能実装済み
 
 次のステップ候補:
-1. 実際のYouTube Live配信テスト
-2. Style-Bert-VITS2の実モデル設定（現在はダミー）
+1. Docker Compose全体起動テスト
+2. 実際のYouTube Live配信テスト
 3. VTube Studio側のホットキー設定ガイド作成
 4. OBS連携・配信設定
 5. その他改善
 
-まずは現在のコードベースを確認して、何から始めるか提案して。
+まずは docker compose up -d で全サービス起動テストしてみよう。
 ```
