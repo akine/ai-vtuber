@@ -4,5 +4,11 @@ torch>=2.1.0
 numpy>=1.26.0
 soundfile>=0.12.1
 pydantic>=2.5.0
-# style-bert-vits2 は別途インストールが必要
-# pip install style-bert-vits2
+
+# Style-Bert-VITS2
+style-bert-vits2>=2.6.0
+
+# 日本語処理
+fugashi>=1.3.0
+unidic-lite>=1.0.8
+jaconv>=0.3.4

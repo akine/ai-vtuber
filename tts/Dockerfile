@@ -7,6 +7,9 @@ RUN apt-get update && apt-get install -y \
     libsndfile1 \
     curl \
     git \
+    mecab \
+    libmecab-dev \
+    mecab-ipadic-utf8 \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better caching
@@ -16,8 +19,13 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY . .
 
-# Create models directory
-RUN mkdir -p /app/models
+# Create directories
+RUN mkdir -p /app/models /root/.cache/huggingface
+
+# Environment variables
+ENV MODEL_DIR=/app/models
+ENV MODEL_NAME=jvnv-F1-jp
+ENV HF_HOME=/root/.cache/huggingface
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
