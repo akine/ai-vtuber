@@ -191,19 +191,19 @@ curl http://localhost:8080/health
 - [x] Orchestrator基盤（FastAPI）
 - [x] 各種設定ファイル（.env, ng_words.txt, scripts/）
 
-### Phase 2: コア機能実装 🔄 進行中
+### Phase 2: コア機能実装 ✅ 完了
 
 - [x] YouTube Chat取得強化（エラーハンドリング、再接続ロジック）
 - [x] Twitch対応スケルトン作成
 - [x] MockChatFetcher作成（テスト用）
-- [ ] main.py統合（モックモード対応）
+- [x] main.py統合（モックモード対応）
 - [ ] 実際のYouTube Live配信でのテスト
 
-### Phase 3: 話題・雑談システム ⏳ 未着手
+### Phase 3: 話題・雑談システム ✅ 完了
 
-- [ ] Google News RSS取得
-- [ ] はてなブックマーク取得
-- [ ] 話題選択ロジック
+- [x] Google News RSS取得
+- [x] はてなブックマーク取得
+- [x] 話題選択ロジック（カテゴリローテーション、重複回避）
 
 ### Phase 4: 安定化・運用 ⏳ 未着手
 
