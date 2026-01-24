@@ -19,8 +19,9 @@ class Settings(BaseSettings):
     TTS_URL: str = "http://localhost:8001"
 
     # VTube Studio
+    VTS_ENABLED: bool = False  # VTS連携を有効にする場合はTrue
     VTS_HOST: str = "localhost"
-    VTS_PORT: int = 8001
+    VTS_PORT: int = 8001  # VTube Studio APIのデフォルトポート
 
     # Character
     CHARACTER_NAME: str = "ミコト"

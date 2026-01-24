@@ -16,6 +16,7 @@ from services.emotion_analyzer import extract_emotion, remove_emotion_tags
 from services.memory_manager import MemoryManager
 from services.priority_scorer import PriorityScorer
 from services.safety_filter import SafetyFilter
+from services.vts_controller import VTubeStudioController
 from topic_sources.topic_generator import TopicGenerator
 
 # Prometheusメトリクス
@@ -76,6 +77,17 @@ async def lifespan(app: FastAPI):
     # 話題ジェネレータを作成
     state["topic_generator"] = TopicGenerator()
 
+    # VTube Studio連携（オプション）
+    if settings.VTS_ENABLED:
+        vts = VTubeStudioController(settings.VTS_HOST, settings.VTS_PORT)
+        if await vts.connect():
+            state["vts"] = vts
+        else:
+            print("VTube Studio disabled (connection failed)")
+            state["vts"] = None
+    else:
+        state["vts"] = None
+
     # バックグラウンドタスク開始
     asyncio.create_task(chat_listener())
     asyncio.create_task(comment_processor())
@@ -88,6 +100,8 @@ async def lifespan(app: FastAPI):
     # 終了時のクリーンアップ
     if state["chat_fetcher"]:
         await state["chat_fetcher"].disconnect()
+    if state.get("vts"):
+        await state["vts"].disconnect()
     await state["redis"].close()
     await state["http_client"].aclose()
 
@@ -298,6 +312,11 @@ async def speak(text: str, emotion: str):
     """TTS APIを呼び出して音声再生"""
     tts_start = time.time()
     try:
+        # VTube Studioの表情を変更
+        vts = state.get("vts")
+        if vts:
+            await vts.set_expression(emotion)
+
         response = await state["http_client"].post(
             f"{settings.TTS_URL}/synthesize",
             json={"text": text, "emotion": emotion},
@@ -308,23 +327,49 @@ async def speak(text: str, emotion: str):
             TTS_LATENCY.observe(time.time() - tts_start)
             # 音声データを再生（実際はPipeWire/PulseAudioへ出力）
             audio_data = response.content
-            await play_audio(audio_data)
+            await play_audio(audio_data, vts)
 
     except Exception as e:
         print(f"TTS Error: {e}")
 
 
-async def play_audio(audio_data: bytes):
-    """音声を再生（PipeWire経由でVTube Studioへ）"""
+async def play_audio(audio_data: bytes, vts=None):
+    """音声を再生（PipeWire経由でVTube Studioへ）+ リップシンク"""
     try:
         import io
 
+        import numpy as np
         import sounddevice as sd
         import soundfile as sf
 
         data, samplerate = sf.read(io.BytesIO(audio_data))
-        sd.play(data, samplerate)
-        sd.wait()
+
+        # リップシンク用：音声データをチャンクに分割して再生
+        if vts and vts.is_connected():
+            chunk_size = int(samplerate * 0.05)  # 50msごとに更新
+            total_samples = len(data)
+
+            for i in range(0, total_samples, chunk_size):
+                chunk = data[i:i + chunk_size]
+
+                # このチャンクの音量（RMS）を計算
+                if len(chunk) > 0:
+                    rms = np.sqrt(np.mean(chunk ** 2))
+                    # 音量を0-1に正規化（調整可能）
+                    volume = min(rms * 5, 1.0)
+                    await vts.lip_sync(volume)
+
+                # チャンクを再生
+                sd.play(chunk, samplerate)
+                sd.wait()
+
+            # 再生終了後、口を閉じる
+            await vts.reset_lip_sync()
+        else:
+            # VTSなしの場合は通常再生
+            sd.play(data, samplerate)
+            sd.wait()
+
     except Exception as e:
         print(f"Audio playback error: {e}")
 
